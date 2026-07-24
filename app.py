@@ -106,19 +106,36 @@ async def on_message(message):
             if wordle_id in datos["dias_premiados"]:
                 return
 
-            # 4. Extraer ganadores
+            # 4. Extraer ganadores (Versión mejorada: mixta de menciones y texto plano)
             ganadores = []
             texto_linea_corona = match_corona.group(1)
-            
-            for usuario in message.mentions:
-                if f"<@{usuario.id}>" in texto_linea_corona or f"<@!{usuario.id}>" in texto_linea_corona or usuario.name in texto_linea_corona or (usuario.display_name and usuario.display_name in texto_linea_corona):
-                    ganadores.append(str(usuario.id))
+            # Separamos la línea por espacios y limpiamos posibles comas o puntos
+            tokens = [t.strip().rstrip(",.") for t in texto_linea_corona.split()]
 
-            if not ganadores:
-                nombres_mencionados = [n.strip() for n in texto_linea_corona.split()]
-                for nombre_str in nombres_mencionados:
-                    nombre_limpio = nombre_str.lstrip("@").replace(",", "")
-                    ganadores.append(f"usuario_{nombre_limpio}")
+            for token in tokens:
+                if not token:
+                    continue
+                
+                encontrado = False
+                # A) Intentamos ver si esta palabra corresponde a alguien mencionado en Discord
+                for usuario in message.mentions:
+                    if (f"<@{usuario.id}>" in token or 
+                        f"<@!{usuario.id}>" in token or 
+                        token.lstrip("@").lower() == usuario.name.lower() or 
+                        (usuario.display_name and token.lstrip("@").lower() == usuario.display_name.lower())):
+                        
+                        if str(usuario.id) not in ganadores:
+                            ganadores.append(str(usuario.id))
+                        encontrado = True
+                        break
+                
+                # B) Si no era una mención real (texto plano), lo guardamos como usuario de texto
+                if not encontrado:
+                    nombre_limpio = token.lstrip("@")
+                    if nombre_limpio:
+                        id_texto = f"usuario_{nombre_limpio}"
+                        if id_texto not in ganadores:
+                            ganadores.append(id_texto)
 
             if ganadores:
                 # 5. Calcular y guardar puntos
