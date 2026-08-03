@@ -13,9 +13,18 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 ARCHIVO_DATOS = "wordle_datos.json"
 
+# --- MAPEO FIJO DE USUARIOS ---
+# Rellena este diccionario con los nombres en minúscula tal como aparecen en el texto plano
+# y asignales el ID numérico real de Discord de cada uno (entre comillas).
+MAPEO_USUARIOS = {
+    "darha": "TU_ID_NUMERICO_AQUI",     
+    "luqits": "ID_NUMERICO_DE_LUCAS",   
+    "tomi": "ID_NUMERICO_DE_TOMI"       
+}
+
 # Detecta si el mensaje es el resumen oficial (contiene la corona y las menciones)
 REGEX_GANADORES_APP = re.compile(r"👑\s*[1-6X]/6:\s*(.+)", re.IGNORECASE)
-# Detecta el número de Wordle en el texto O en el embed (ej. "Wordle No. 1859", "Wordle #1859" o "Wordle 1859")
+# Detecta el número de Wordle en el texto O en el embed
 REGEX_NUMERO_WORDLE = re.compile(r"(?:Wordle\s+No\.\s+|Wordle\s+#|Wordle\s+)([0-9,]{3,})", re.IGNORECASE)
 
 def cargar_datos():
@@ -78,14 +87,13 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # 1. FILTRO DE AUTOR: Solo intentamos leer resúmenes si el remitente es la aplicación Wordle
-    # (Verifica si el nombre del autor contiene "wordle", sea la app oficial o un webhook de prueba)
+    # 1. FILTRO DE AUTOR
     if "wordle" in message.author.name.lower():
         match_corona = REGEX_GANADORES_APP.search(message.content)
         if match_corona:
             datos = cargar_datos()
 
-            # 2. Buscar el número de Wordle en el texto del mensaje O en el recuadro negro (Embed)
+            # 2. Buscar el número de Wordle
             wordle_id = None
             match_num = REGEX_NUMERO_WORDLE.search(message.content)
             if match_num:
@@ -106,36 +114,37 @@ async def on_message(message):
             if wordle_id in datos["dias_premiados"]:
                 return
 
-            # 4. Extraer ganadores (Versión mejorada: mixta de menciones y texto plano)
+            # 4. Extraer ganadores (Sistema de mapeo estricto para evitar duplicados)
             ganadores = []
             texto_linea_corona = match_corona.group(1)
-            # Separamos la línea por espacios y limpiamos posibles comas o puntos
             tokens = [t.strip().rstrip(",.") for t in texto_linea_corona.split()]
 
             for token in tokens:
                 if not token:
                     continue
                 
-                encontrado = False
-                # A) Intentamos ver si esta palabra corresponde a alguien mencionado en Discord
-                for usuario in message.mentions:
-                    if (f"<@{usuario.id}>" in token or 
-                        f"<@!{usuario.id}>" in token or 
-                        token.lstrip("@").lower() == usuario.name.lower() or 
-                        (usuario.display_name and token.lstrip("@").lower() == usuario.display_name.lower())):
-                        
-                        if str(usuario.id) not in ganadores:
-                            ganadores.append(str(usuario.id))
-                        encontrado = True
-                        break
+                # Limpiamos el token: quitamos <, >, @, ! y lo pasamos a minúscula
+                token_limpio = re.sub(r'[<@!>]', '', token).lower()
                 
-                # B) Si no era una mención real (texto plano), lo guardamos como usuario de texto
-                if not encontrado:
-                    nombre_limpio = token.lstrip("@")
-                    if nombre_limpio:
-                        id_texto = f"usuario_{nombre_limpio}"
-                        if id_texto not in ganadores:
-                            ganadores.append(id_texto)
+                if not token_limpio:
+                    continue
+                
+                # A) Si el token quedó solo con números, la app mandó un ping real (<@123456>)
+                if token_limpio.isdigit():
+                    if token_limpio not in ganadores:
+                        ganadores.append(token_limpio)
+                
+                # B) Si el nombre en texto plano está en nuestro diccionario, lo convertimos a su ID real
+                elif token_limpio in MAPEO_USUARIOS:
+                    id_real = MAPEO_USUARIOS[token_limpio]
+                    if id_real not in ganadores:
+                        ganadores.append(id_real)
+                        
+                # C) Fallback: Si no lo conocemos, se guarda con el prefijo "usuario_"
+                else:
+                    id_texto = f"usuario_{token_limpio}"
+                    if id_texto not in ganadores:
+                        ganadores.append(id_texto)
 
             if ganadores:
                 # 5. Calcular y guardar puntos
@@ -152,7 +161,6 @@ async def on_message(message):
                 await message.add_reaction("🏆")
                 await enviar_tabla_ranking(message.channel)
 
-    # Permitir que el bot siga procesando comandos normalmente (para que funcione escribir !ranking)
     await bot.process_commands(message)
 
 @bot.command(name="ranking")
