@@ -17,9 +17,9 @@ ARCHIVO_DATOS = "wordle_datos.json"
 # Rellena este diccionario con los nombres en minúscula tal como aparecen en el texto plano
 # y asignales el ID numérico real de Discord de cada uno (entre comillas).
 MAPEO_USUARIOS = {
-    "darha": "TU_ID_NUMERICO_AQUI",     
-    "luqits": "ID_NUMERICO_DE_LUCAS",   
-    "tomi": "ID_NUMERICO_DE_TOMI"       
+    "darha": os.getenv("ID_DARHA"),
+    "luqits": os.getenv("ID_LUQITS"),
+    "tomi": os.getenv("ID_TOMI")    
 }
 
 # Detecta si el mensaje es el resumen oficial (contiene la corona y las menciones)
